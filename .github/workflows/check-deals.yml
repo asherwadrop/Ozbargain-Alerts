@@ -2,13 +2,19 @@ name: Check OzBargain
 
 on:
   schedule:
-       - cron: "*/5 * * * *"    # every 5 minutes
+    - cron: "*/5 * * * *"    # every 5 minutes
   workflow_dispatch:          # adds a "Run workflow" button for testing
     inputs:
       send_test:
         description: "Send a test message to Discord"
         type: boolean
         default: true
+      min_votes:
+        description: "Upvotes needed (change for a practice run)"
+        default: "30"
+      window_minutes:
+        description: "Within how many minutes of posting"
+        default: "60"
 
 permissions:
   contents: write             # lets it save seen.json
@@ -26,6 +32,8 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           SEND_TEST: ${{ inputs.send_test }}
+          MIN_VOTES: ${{ inputs.min_votes }}
+          WINDOW_MINUTES: ${{ inputs.window_minutes }}
         run: python3 check_deals.py
 
       - name: Remember which deals were already sent
