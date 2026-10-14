@@ -46,7 +46,7 @@ def save_seen(seen):
         json.dump(seen[-500:], f, indent=1)
 
 
-def get_hot_deals():
+def get_hot_deals(min_votes, window_minutes):
     root = ET.fromstring(fetch(FEED_URL))
     now = datetime.now(timezone.utc)
     hot = []
@@ -57,7 +57,7 @@ def get_hot_deals():
         posted = parsedate_to_datetime(item.findtext("pubDate"))
         age_minutes = (now - posted).total_seconds() / 60
         votes = int(meta.get("votes-pos", 0))
-        if age_minutes <= WINDOW_MINUTES and votes >= MIN_VOTES:
+        if age_minutes <= window_minutes and votes >= min_votes:
             hot.append({
                 "id": item.findtext("link").rsplit("/", 1)[-1],
                 "title": item.findtext("title"),
@@ -79,9 +79,10 @@ def post(webhook_url, message):
     urllib.request.urlopen(request, timeout=30)
 
 
-def send_to_discord(webhook_url, deal):
+def send_to_discord(webhook_url, deal, practice=False):
+    label = "🧪 TEST: " if practice else ""
     embed = {
-        "title": deal["title"][:256],
+        "title": (label + deal["title"])[:256],
         "url": deal["link"],
         "description": (
             f"🔥 **{deal['votes']} upvotes** in {deal['age_minutes']} minutes"
@@ -102,16 +103,29 @@ def main():
     if os.environ.get("SEND_TEST") == "true":
         post(webhook_url, {"content": "✅ Your OzBargain alerts are connected!"})
 
+    # A manual test run can use different numbers than the settings above
+    min_votes = int(os.environ.get("MIN_VOTES") or MIN_VOTES)
+    window_minutes = int(os.environ.get("WINDOW_MINUTES") or WINDOW_MINUTES)
+    practice = (min_votes, window_minutes) != (MIN_VOTES, WINDOW_MINUTES)
+    if practice:
+        print(f"Practice run: {min_votes}+ votes within {window_minutes} minutes")
+
     seen = load_seen()
-    hot_deals = get_hot_deals()
-    for deal in hot_deals:
-        if deal["id"] in seen:
-            continue
-        print(f"Alerting: {deal['title']} ({deal['votes']} votes)")
-        send_to_discord(webhook_url, deal)
-        seen.append(deal["id"])
+    hot_deals = get_hot_deals(min_votes, window_minutes)
+    if practice:
+        # Send at most 5, and don't remember them, so real alerts still work
+        for deal in hot_deals[:5]:
+            print(f"Practice alert: {deal['title']} ({deal['votes']} votes)")
+            send_to_discord(webhook_url, deal, practice=True)
+    else:
+        for deal in hot_deals:
+            if deal["id"] in seen:
+                continue
+            print(f"Alerting: {deal['title']} ({deal['votes']} votes)")
+            send_to_discord(webhook_url, deal)
+            seen.append(deal["id"])
     save_seen(seen)
-    print(f"Checked feed: {len(hot_deals)} hot deal(s) right now.")
+    print(f"Checked feed: {len(hot_deals)} matching deal(s) right now.")
 
 
 if __name__ == "__main__":
