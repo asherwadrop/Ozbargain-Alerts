@@ -92,7 +92,9 @@ def send_to_discord(webhook_url, deal, practice=False):
     }
     if deal["image"]:
         embed["thumbnail"] = {"url": deal["image"]}
-    post(webhook_url, {"embeds": [embed]})
+    # Plain text too, so phone notifications have something to show
+    content = f"{label}🔥 {deal['votes']} votes: {deal['title']}"[:2000]
+    post(webhook_url, {"content": content, "embeds": [embed]})
 
 
 def main():
